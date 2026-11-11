@@ -161,6 +161,7 @@ const CSS = `
 async function refresh() {
   const [status, models] = await Promise.all([call("/status"), call("/models")]);
   state.status = status;
+  state.statusAt = performance.now();
   state.settings = status.settings;
   state.models = models.models;
   state.folders = models.folders;
@@ -176,6 +177,7 @@ async function refresh() {
 function onStatus(snapshot) {
   const previous = state.status;
   state.status = { ...(previous || {}), ...snapshot };
+  state.statusAt = performance.now();
   for (const event of snapshot.events || []) {
     if (event.time > state.seenEvent) {
       if (state.seenEvent && event.level === "error") toast("error", "Vast Worker", event.message);
@@ -219,13 +221,14 @@ function render() {
   ui.message.textContent = st.message || "";
   ui.message.style.display = st.message ? "" : "none";
   const inst = st.instance;
+  ui.clocks = {};
   ui.instanceInfo.replaceChildren();
   if (inst) {
     const rows = [
       ["GPU", `${inst.num_gpus > 1 ? inst.num_gpus + "× " : ""}${inst.gpu_name || "?"}${inst.gpu_ram_gb ? ` · ${inst.gpu_ram_gb} GB` : ""}`],
       ["Price", `${money(inst.dph_total)}/hour`],
-      ["Running for", duration(inst.uptime_seconds)],
-      ["Spent so far (estimate)", money(inst.cost_estimate)],
+      ["Running for", duration(inst.uptime_seconds), "uptime"],
+      ["Spent so far (estimate)", money(inst.cost_estimate), "cost"],
       ["Location", inst.geolocation || "?"],
       ["Instance", `#${inst.id}`],
     ];
@@ -233,9 +236,13 @@ function render() {
       rows.splice(4, 0, ["Disk free", `${bytes(inst.disk_free_bytes)}${inst.disk_gb ? ` of ${inst.disk_gb} GB` : ""}`]);
     }
     if (st.phase === "ready" && !st.busy) {
-      rows.splice(4, 0, ["Auto-destroy in", duration(inst.idle_limit_seconds - inst.idle_seconds)]);
+      rows.splice(4, 0, ["Auto-destroy in", duration(inst.idle_limit_seconds - inst.idle_seconds), "idle"]);
     }
-    for (const [k, v] of rows) ui.instanceInfo.append(h("dt", {}, k), h("dd", {}, v));
+    for (const [k, v, clock] of rows) {
+      const dd = h("dd", {}, v);
+      if (clock) ui.clocks[clock] = dd;
+      ui.instanceInfo.append(h("dt", {}, k), dd);
+    }
   }
   ui.instanceInfo.style.display = inst ? "" : "none";
   ui.destroy.style.display = inst ? "" : "none";
@@ -251,7 +258,8 @@ function render() {
   if (act) {
     ui.activity.append(h("div", { class: "vw-break" }, act.message || act.phase));
     if (act.job_seconds !== null && act.job_seconds !== undefined) {
-      ui.activity.append(h("div", { class: "vw-small vw-muted" }, `Job running for ${duration(act.job_seconds)}`));
+      ui.clocks.job = h("div", { class: "vw-small vw-muted" }, `Job running for ${duration(act.job_seconds)}`);
+      ui.activity.append(ui.clocks.job);
     }
     for (const item of act.items || []) {
       const pct = item.total ? Math.min(100, (100 * (item.bytes || 0)) / item.total) : (["done", "exists"].includes(item.state) ? 100 : 0);
@@ -287,6 +295,26 @@ function render() {
   ui.log.replaceChildren(...(st.events || []).slice(-40).reverse().map((e) => h("div",
     { class: e.level === "error" ? "vw-err" : e.level === "warn" ? "vw-warn" : "" },
     `${new Date(e.time * 1000).toLocaleTimeString()}  ${e.message}`)));
+  renderClocks();
+}
+
+// The server pushes a snapshot when something changes and otherwise only every
+// 20 s, which is too coarse while a job runs. The clocks are advanced here
+// from the time the last snapshot arrived, once a second.
+function renderClocks() {
+  const st = state.status;
+  const clocks = ui.clocks;
+  if (!st || !clocks) return;
+  const elapsed = state.statusAt ? (performance.now() - state.statusAt) / 1000 : 0;
+  const inst = st.instance;
+  if (inst) {
+    const uptime = inst.uptime_seconds + elapsed;
+    if (clocks.uptime) clocks.uptime.textContent = duration(uptime);
+    if (clocks.cost) clocks.cost.textContent = money((inst.dph_total * uptime) / 3600);
+    if (clocks.idle) clocks.idle.textContent = duration(inst.idle_limit_seconds - inst.idle_seconds - elapsed);
+  }
+  const job = st.activity?.job_seconds;
+  if (clocks.job && job !== null && job !== undefined) clocks.job.textContent = `Job running for ${duration(job + elapsed)}`;
 }
 
 function renderPill(st) {
@@ -1014,6 +1042,7 @@ app.registerExtension({
     document.body.append(ui.pill);
 
     api.addEventListener("vast_worker.status", (e) => onStatus(e.detail));
+    setInterval(renderClocks, 1000);
     api.addEventListener("vast_worker.confirm", (e) => showConfirm(e.detail));
     api.addEventListener("vast_worker.confirm_closed", (e) => {
       if (dialogId === e.detail?.id) closeDialog();

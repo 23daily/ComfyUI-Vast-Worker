@@ -101,7 +101,12 @@ class Instance:
         for key in ("VAST_API_KEY", "VAST_WORKER_SETTINGS_JSON", "VAST_WORKER_DATA_DIR"):
             env.pop(key, None)
         env.update(self.env)
+        # A real instance has its own /tmp. Without this the agent finds the
+        # heartbeat file of an earlier run and its watchdog fires at once.
+        tmp_dir = os.path.join(self.sim.work_dir, f"inst-{self.id}", "tmp")
+        os.makedirs(tmp_dir, exist_ok=True)
         env.update({
+            "TMPDIR": tmp_dir,
             "WORKSPACE": self.workspace,
             "CONTAINER_ID": str(self.id),
             "CONTAINER_API_KEY": self.container_key,

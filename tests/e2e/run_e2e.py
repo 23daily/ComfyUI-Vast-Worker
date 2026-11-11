@@ -102,7 +102,8 @@ class Suite:
             "VAST_WORKER_API_BASE": self.sim_url,
             "VAST_API_KEY": "sim-key",
             "VAST_WORKER_POLL_SECONDS": "0.5",
-            "VAST_WORKER_TICK_SECONDS": "1",
+            # The playground keeps the real 20 s tick so the sidebar behaves as it does in use.
+            "VAST_WORKER_TICK_SECONDS": "20" if self.args.serve else "1",
             "VAST_WORKER_ALLOW_FILE_GIT": "1",
             "VAST_WORKER_CIVITAI_BASE": self.sim_url,
         })
