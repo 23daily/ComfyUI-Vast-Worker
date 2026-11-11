@@ -1,0 +1,4 @@
+# Not needed by people who install the node from the registry.
+tests/
+scripts/
+.github/

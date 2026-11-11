@@ -1,0 +1,23 @@
+[project]
+name = "vast-worker"
+version = "0.1.0"
+description = "Everyone needs a GPU. No one needs it 24/7. Made for Mac users: run ComfyUI workflows on a rented Vast.ai GPU. Local ComfyUI stays the editor; the plugin rents, provisions and destroys the instance, and models are downloaded there instead of on your machine."
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.10"
+# aiohttp is the only runtime dependency and ships with ComfyUI itself.
+dependencies = []
+classifiers = [
+    "Operating System :: OS Independent",
+    "Environment :: GPU :: NVIDIA CUDA",
+]
+
+[project.urls]
+Repository = "https://github.com/23daily/ComfyUI-Vast-Worker"
+"Bug Tracker" = "https://github.com/23daily/ComfyUI-Vast-Worker/issues"
+
+[tool.comfy]
+# TODO before publishing: your publisher id from https://registry.comfy.org
+PublisherId = ""
+DisplayName = "Vast Worker"
+Icon = ""
